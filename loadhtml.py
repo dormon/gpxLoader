@@ -12,11 +12,25 @@ import string
 user = "dormon"
 
 gpsFileName="/media/"+user+"/GARMIN/Garmin/GPX/dormon.gpx"
+visitedFileName = "/media/"+user+"/GARMIN/Garmin/geocache_visits.txt"
 
 
+visitedFileText = open(visitedFileName).read().decode("utf-16")
+
+#html text
 mapText = open(sys.argv[1]).read()
 
+allIcons=re.findall(r"<img src.*?class=\"leaflet-marker-icon.*?\".*?>",mapText)
+#found caches True/False
+foundCaches = map(lambda x:re.findall("MyFind.png",x)!=[],allIcons)
+#names
+cacheNames = map(lambda x:re.search("title=\"(.*?)\"",x).group(1),allIcons)
+#(name,True/False)*
+foundNames = dict(zip(cacheNames,foundCaches))
+
 #sed "s/\">/\">\n/g" | grep "data-key" | sed "s/.*data-key=\"\(.*\)\">/\1/g" | sort | uniq
+
+#<img src="./Geocaching _ Geocaching     Maps_files/MyFind.png" class="leaflet-marker-icon  leaflet-clickable leaflet-zoom-animated" title="Stará valašská II" style="margin-left: -10px; margin-top: -11px; width: 21px; height: 2    1px; transform: translate3d(-17px, 19px, 0px); z-index: 19;">
 
 re.sub("\">","\">\n",mapText)
 datakeys = re.findall("data-key=\"[A-Z0-9]*\"",mapText)
@@ -87,9 +101,15 @@ alreadyInside = gpxCounter
 for w in waypoints:
   url = "http://www.geocaching.com/geocache/"+w[0]
   idname = w[0]
-  name   = "todo"
+  name   = w[0]
   lat    = w[1]
   lon    = w[2]
+
+  if re.search(idname,visitedFileText):
+    print str(gpxCounter-alreadyInside+1)+" out of: "+str(len(waypoints))+" "+name+" - in visited file"
+    gpxCounter+=1
+    continue
+
   if not gpxNamesOnGPS.has_key(idname):
     newWpt = xml.dom.minidom.parseString(wptExample).getElementsByTagName("wpt")[0]
     #set lat
@@ -106,12 +126,20 @@ for w in waypoints:
 
     name = re.findall("<span id=\"ctl00_ContentBody_CacheName\">.*?</span>",html)[0][39:][:-7]
 
+    if foundNames.has_key(name):
+        if foundNames[name]:
+            print str(gpxCounter-alreadyInside+1)+" out of: "+str(len(waypoints))+" "+name+" - uz nalezena kes"
+            gpxCounter+=1
+            continue
+    else:
+        print name+" nema klic"
+
     printable = set(string.printable)
     name = filter(lambda x: x in printable, name)
 
     newWpt.getElementsByTagName("groundspeak:cache")[0].getElementsByTagName("groundspeak:name")[0].firstChild.nodeValue = name
 
-    print str(gpxCounter-alreadyInside+1)+"out of: "+str(len(waypoints))+" "+name
+    print str(gpxCounter-alreadyInside+1)+" out of: "+str(len(waypoints))+" "+name
     terrainText     = html[html.find("Terrain:"   ):][:1000]
     difficultyText  = html[html.find("Difficulty:"):][:1000]
     sizeText        = html[html.find("/images/icons/container/")+len("/images/icons/container/"):][:1000]
@@ -151,6 +179,9 @@ for w in waypoints:
 
 
     gpxOnGPS +=[newWpt]
+    gpxCounter+=1
+  else:
+    print str(gpxCounter-alreadyInside+1)+" out of: "+str(len(waypoints))+" "+name+" - alredy loaded"
     gpxCounter+=1
 
 gpsFile = open(gpsFileName,"w")
